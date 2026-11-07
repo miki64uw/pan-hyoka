@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>偏りが強いパン評価</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ===== ここに Firebase の設定（firebaseConfig）を丸ごと貼り替えてください ===== */
+const firebaseConfig = {
+  apiKey: "ここを書き換え",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+/* ============================================================================ */
+</script>
+<style>
+:root{
+  --crumb:#efe0c4;       /* 食パンの中身 */
+  --crumb-light:#f6ead4;
+  --crust:#9c5a28;       /* 耳の色 */
+  --crust-soft:#d2ab7c;
+  --ink:#3d2817;
+  --muted:#8f7058;
+  --danger:#b4483a;
+  --field:#fffaf0;
+  --body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--crumb);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.7;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+img{max-width:100%}
+[hidden]{display:none!important}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:20px;border:3px solid var(--crust);border-radius:6px;padding:28px 20px 32px;background:var(--crumb)}
+h1{font-weight:700;font-size:clamp(24px,6vw,32px);line-height:1.3;margin:0;text-wrap:balance}
+h1 small{display:block;font-weight:500;font-size:13px;color:var(--muted);letter-spacing:.04em;margin-top:4px}
+h2{font-size:18px;font-weight:700;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--crust);outline-offset:2px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.who{font-size:12px;color:var(--muted);text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0;overflow-wrap:anywhere}
+
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--crust);background:transparent;color:var(--crust);border-radius:4px;padding:8px 16px;font-weight:700}
+.btn.primary{background:var(--crust);color:var(--crumb-light)}
+.btn.small{padding:4px 12px;font-size:13px}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:default}
+.note{font-size:13px;color:var(--muted);margin:0}
+.banner{font-size:13px;padding:8px 12px;border-radius:4px;background:var(--crumb-light);border:1px solid var(--crust-soft)}
+
+.panel,.card,.empty{background:var(--crumb-light);border:1px solid var(--crust-soft);border-radius:4px}
+.panel{padding:18px;display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.lbl{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+input[type=text],input[type=url],input[type=date],input[type=email],input[type=password],select,textarea{width:100%;border:1px solid var(--crust-soft);border-radius:4px;padding:8px 10px;background:var(--field)}
+textarea{min-height:72px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:480px){.grid2{grid-template-columns:1fr}}
+
+.scores{display:flex;flex-direction:column;gap:12px}
+.grp{font-size:12px;font-weight:700;color:var(--crust);letter-spacing:.08em;margin-top:4px}
+.sc-row{display:flex;flex-direction:column;gap:4px}
+.sc-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}
+.sc-head small{color:var(--muted);font-size:12px}
+.sc-head .val{font-variant-numeric:tabular-nums;font-weight:700;color:var(--crust);min-width:3em;text-align:right}
+.seg{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}
+.seg button{border:1px solid var(--crust-soft);background:var(--field);border-radius:3px;padding:6px 0;font-size:13px;font-variant-numeric:tabular-nums}
+.seg button.lit{background:#ecd3ab}
+.seg button.on{background:var(--crust);border-color:var(--crust);color:var(--field);font-weight:700}
+.na{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+
+.thumbs{display:flex;flex-wrap:wrap;gap:8px}
+.thumbs:empty{display:none}
+.th{position:relative;width:76px;height:76px;border-radius:4px;overflow:hidden;border:1px solid var(--crust-soft);background:var(--field)}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th button{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:var(--ink);color:var(--field);font-size:12px;line-height:22px;padding:0}
+.upl{align-self:flex-start;display:inline-block}
+
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.count{font-size:13px;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:12px}
+.card{padding:16px 18px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card h3{font-size:19px;font-weight:700;margin:0;line-height:1.35;overflow-wrap:anywhere}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.chip{border:1px solid var(--crust);color:var(--crust);border-radius:3px;padding:0 8px;font-weight:700;font-size:12px}
+.chip.none{border:1px dashed var(--crust-soft);color:var(--muted)}
+.rating{display:flex;align-items:center;gap:6px}
+.loaves{font-size:20px;letter-spacing:1px}
+.loaves .off{opacity:.22;filter:grayscale(1)}
+.rating .num{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.edge{font-size:13px}
+.edge b,.oshi b{color:var(--crust)}
+details.bd summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;font-size:13px;margin-top:8px}
+.bar{height:6px;border-radius:3px;background:#e6cfa9;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--crust)}
+.bars .n{font-variant-numeric:tabular-nums;color:var(--muted);text-align:right}
+.gallery{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.gallery a{flex:0 0 auto;width:110px;height:110px;border-radius:4px;overflow:hidden;border:1px solid var(--crust-soft);background:var(--field)}
+.gallery a img{width:100%;height:100%;object-fit:cover;display:block}
+.facts{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.facts a{color:var(--crust)}
+.oshi{font-size:14px}
+.comment{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.card-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding-top:6px;border-top:1px solid var(--crust-soft)}
+.maplink{color:var(--crust);font-weight:700;text-decoration:none}
+.maplink:hover{text-decoration:underline}
+.nomap{font-size:13px;color:var(--muted)}
+.empty{text-align:center;padding:32px 16px;border-style:dashed;color:var(--muted)}
+.empty strong{display:block;font-size:17px;color:var(--ink);margin-bottom:4px}
+.sp-row{display:flex;gap:8px;align-items:center}
+.sp-row input{flex:1;min-width:0}
+.sp-list{display:flex;flex-direction:column;gap:8px}
+.login{max-width:360px;width:100%;margin:8px auto 0}
+.gallery button{flex:0 0 auto;width:110px;height:110px;border-radius:4px;overflow:hidden;border:1px solid var(--crust-soft);background:var(--field);padding:0}
+.gallery button img{width:100%;height:100%;object-fit:cover;display:block}
+.facts .link{border:0;background:none;padding:0;color:var(--crust);text-decoration:underline;font-size:13px}
+.viewer{position:fixed;inset:0;background:rgba(30,18,8,.85);display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top,0px)) 16px max(16px,env(safe-area-inset-bottom,0px));z-index:20}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain;background:var(--field)}
+.viewer p{color:#fff}
+.viewer button{position:absolute;top:max(12px,env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));background:var(--field);border:0;border-radius:4px;padding:6px 14px;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <h1>偏りが強いパン評価<small>食べたパン屋を、エリアと種族で記録するノート</small></h1>
+    <div class="who" id="who" hidden><span id="whoMail"></span><button class="btn small" id="btnLogout" type="button">ログアウト</button></div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- ログイン -->
+  <section class="panel login" id="loginPanel" hidden>
+    <h2>ログイン</h2>
+    <form id="loginForm" style="display:flex;flex-direction:column;gap:12px">
+      <div class="field"><label for="lMail">メールアドレス</label><input type="email" id="lMail" autocomplete="username" required></div>
+      <div class="field"><label for="lPass">パスワード</label><input type="password" id="lPass" autocomplete="current-password" required></div>
+      <button class="btn primary" type="submit" id="lBtn">ログイン</button>
+      <p class="note" id="lMsg" hidden></p>
+    </form>
+  </section>
+
+  <div id="app" hidden style="display:flex;flex-direction:column;gap:20px">
+    <div class="actions">
+      <button class="btn primary" id="btnAdd" type="button">＋ お店を追加</button>
+      <button class="btn" id="btnSpecies" type="button">種族を編集</button>
+    </div>
+
+    <section class="panel" id="speciesPanel" hidden>
+      <h2>種族を編集</h2>
+      <p class="note">名前を変えると、登録済みのお店にも反映されます。削除した種族のお店は「未分類」になります。</p>
+      <div class="sp-list" id="spList"></div>
+      <form class="sp-row" id="spForm">
+        <input type="text" id="spNew" placeholder="新しい種族名" maxlength="30" aria-label="新しい種族名">
+        <button class="btn small primary" type="submit">追加</button>
+      </form>
+    </section>
+
+    <section class="panel" id="shopPanel" hidden>
+      <h2 id="shopPanelTitle">お店を追加</h2>
+      <form id="shopForm" style="display:flex;flex-direction:column;gap:14px">
+        <div class="field"><label for="fName">店名</label><input type="text" id="fName" required maxlength="60"></div>
+        <div class="grid2">
+          <div class="field"><label for="fArea">エリア</label><input type="text" id="fArea" list="areaList" placeholder="例：世田谷区" maxlength="30"><datalist id="areaList"></datalist></div>
+          <div class="field"><label for="fSpecies">種族</label><select id="fSpecies"></select></div>
+        </div>
+        <div class="field"><span class="lbl">評価（各10段階）</span>
+          <p class="note">1〜3 不満あり／4〜6 普通／7〜8 明確に良い／9〜10 わざわざ行く理由になる。同じ数字をもう一度押すと未入力に戻ります。</p>
+          <div class="scores" id="fScores"></div></div>
+        <div class="grid2">
+          <div class="field"><label for="fDate">購入日</label><input type="date" id="fDate"></div>
+          <div class="field"><label for="fAmount">購入金額（円・税込）</label><input type="text" id="fAmount" inputmode="numeric" placeholder="例：1280"></div>
+        </div>
+        <div class="field"><span class="lbl">パンの写真（複数可）</span>
+          <div class="thumbs" id="tBread"></div>
+          <label class="btn small upl" for="upBread">＋ パンの写真を追加</label>
+          <input type="file" id="upBread" accept="image/*" multiple hidden></div>
+        <div class="field"><span class="lbl">レシート・領収書（複数可）</span>
+          <div class="thumbs" id="tReceipt"></div>
+          <label class="btn small upl" for="upReceipt">＋ レシートを追加</label>
+          <input type="file" id="upReceipt" accept="image/*" multiple hidden>
+          <p class="note">文字が読めるよう、真上から明るい場所で撮影してください。紙の原本も保管してください。</p></div>
+        <p class="note" id="upMsg" hidden></p>
+        <div class="field"><label for="fOshi">推しのパン</label><input type="text" id="fOshi" maxlength="60" placeholder="例：スペルト小麦のカンパーニュ"></div>
+        <div class="field"><label for="fComment">ひとこと</label><textarea id="fComment" maxlength="400"></textarea></div>
+        <div class="field"><label for="fMap">GoogleマップのURL</label><input type="url" id="fMap" placeholder="https://maps.app.goo.gl/…">
+          <p class="note">Googleマップでお店を開き「共有」→「リンクをコピー」で貼り付けてください。</p></div>
+        <div class="actions" style="justify-content:space-between">
+          <div class="actions">
+            <button class="btn primary" type="submit" id="fSave">保存</button>
+            <button class="btn" type="button" id="fCancel">閉じる</button>
+          </div>
+          <button class="btn danger" type="button" id="fDelete" hidden>このお店を削除</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="filters" aria-label="絞り込み">
+      <div class="field"><label for="qArea">エリア</label><select id="qArea"></select></div>
+      <div class="field"><label for="qSpecies">種族</label><select id="qSpecies"></select></div>
+    </section>
+    <div class="count" id="count"></div>
+    <div class="list" id="list"><div class="empty"><strong>読み込み中…</strong>保存したお店を呼び出しています。</div></div>
+  </div>
+</div>
+<div class="viewer" id="viewer" hidden><button type="button" id="vClose">閉じる</button><p id="vMsg">読み込み中…</p><img id="vImg" alt="" hidden></div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const NONE = "__none";
+  function banner(msg){ const b=$("banner"); b.textContent = msg||""; b.hidden = !msg; }
+
+  if (!window.firebase || typeof firebaseConfig === "undefined" || !firebaseConfig.databaseURL || /書き換え/.test(firebaseConfig.apiKey)){
+    banner("設定が未入力です。index.html 上部の firebaseConfig を、Firebaseでコピーしたものに貼り替えてください。databaseURL が入っているかも確認してください。");
+    return;
+  }
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth(), db = firebase.database();
+
+  const DEFAULT_SPECIES = ["個性粉派","王道日本パン派","ハード・リーン派","発酵・サワードウ派","バター・ヴィエノワズリー派","単品特化派","代替素材派"];
+  const ITEMS = [
+    {k:"flour",   n:"粉の個性",       d:"香り・風味の立ち方",           g:"商品力"},
+    {k:"crust",   n:"クラスト",       d:"外皮の焼き込み・香ばしさ"},
+    {k:"crumb",   n:"クラム",         d:"中身の気泡・しっとり感・弾力"},
+    {k:"ferment", n:"発酵・香り",     d:"熟成感、酸味の質"},
+    {k:"balance", n:"味のバランス",   d:"塩味・甘味・油脂の整い方"},
+    {k:"filling", n:"内容物",         d:"具材・フィリングの質と量", na:true},
+    {k:"unique",  n:"独自性（尖り）", d:"他店で代わりがきかないか"},
+    {k:"price",   n:"価格納得感",     d:"価格に対する満足度",           g:"事業性"},
+    {k:"revisit", n:"再訪意向",       d:"また買いに行くか"},
+    {k:"store",   n:"店舗体験",       d:"陳列の見やすさ・接客・行列の回り方"}
+  ];
+
+  let shops = [], species = [], editingId = null, scores = {};
+  let photos = {bread:[], receipt:[]}, freshIds = [], dropIds = [];
+  const thumbs = new Map(); // photoId -> dataURL（一覧用の小さい画像）
+  let offShops = null, offSpecies = null;
+
+  const summary = sc => { const v = ITEMS.map(it => sc && sc[it.k]).filter(x => typeof x === "number" && x > 0); return {n:v.length, avg:v.length ? v.reduce((a,b)=>a+b,0)/v.length : 0}; };
+  const spName = id => { const s = species.find(x => x.id === id); return s ? s.name : ""; };
+  const loaves = n => { let h=""; for(let i=1;i<=5;i++) h += i<=n ? "🍞" : '<span class="off">🍞</span>'; return h; };
+  const safeUrl = u => { try{ const x = new URL(u); return (x.protocol==="https:"||x.protocol==="http:") ? x.href : ""; }catch(e){ return ""; } };
+  const arr = v => Array.isArray(v) ? v : (v ? Object.values(v) : []);
+  const fail = () => banner("保存できませんでした。通信状況を確認して、もう一度お試しください。");
+
+  /* ---------- 写真：一覧用の小さい画像と、タップ時の大きい画像を分けて保存（通信量の節約） ---------- */
+  function shrink(file, maxSide, q){
+    return new Promise(resolve => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, maxSide / Math.max(img.width, img.height)), c = document.createElement("canvas");
+        c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        resolve(c.toDataURL("image/jpeg", q));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+  async function loadThumbs(ids){
+    const need = [...new Set(ids)].filter(id => id && !thumbs.has(id));
+    await Promise.all(need.map(id => db.ref("photoThumbs/"+id).once("value").then(s => { thumbs.set(id, s.val() || ""); }).catch(()=>{})));
+  }
+  function removePhotos(ids){
+    if (!ids.length) return;
+    const up = {}; ids.forEach(id => { up["photoThumbs/"+id] = null; up["photoFull/"+id] = null; thumbs.delete(id); });
+    db.ref().update(up).catch(()=>{});
+  }
+  async function openViewer(id){
+    $("viewer").hidden = false; $("vImg").hidden = true; $("vMsg").hidden = false; $("vMsg").textContent = "読み込み中…";
+    try{
+      const s = await db.ref("photoFull/"+id).once("value");
+      if (!s.val()){ $("vMsg").textContent = "画像が見つかりません。"; return; }
+      $("vImg").src = s.val(); $("vImg").hidden = false; $("vMsg").hidden = true;
+    }catch(e){ $("vMsg").textContent = "画像を読み込めませんでした。"; }
+  }
+  $("vClose").onclick = () => { $("viewer").hidden = true; $("vImg").removeAttribute("src"); };
+  document.addEventListener("click", e => { const b = e.target.closest("[data-view]"); if(b) openViewer(b.dataset.view); });
+
+  /* ---------- 表示 ---------- */
+  function fillSelect(sel, opts, keep){
+    const cur = keep ? sel.value : null;
+    sel.innerHTML = opts.map(o => `<option value="${esc(o[0])}">${esc(o[1])}</option>`).join("");
+    if (cur !== null && opts.some(o => o[0] === cur)) sel.value = cur;
+  }
+  function renderFilters(){
+    const areas = [...new Set(shops.map(s => (s.area||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"ja"));
+    fillSelect($("qArea"), [["","すべて"], ...areas.map(a=>[a,a])], true);
+    fillSelect($("qSpecies"), [["","すべて"], ...species.map(s=>[s.id,s.name||"（名前なし）"]), [NONE,"未分類"]], true);
+    $("areaList").innerHTML = areas.map(a=>`<option value="${esc(a)}">`).join("");
+  }
+  function renderList(){
+    const qa = $("qArea").value, qs = $("qSpecies").value;
+    const rows = shops.filter(s => {
+      if (qa && (s.area||"").trim() !== qa) return false;
+      if (qs === NONE) return !spName(s.species);
+      if (qs && s.species !== qs) return false;
+      return true;
+    });
+    const list = $("list");
+    $("count").textContent = shops.length ? `${rows.length}件 / 全${shops.length}件` : "";
+    if (!shops.length){ list.innerHTML = `<div class="empty"><strong>まだお店がありません</strong>「＋ お店を追加」から1軒目を登録しましょう。</div>`; return; }
+    if (!rows.length){ list.innerHTML = `<div class="empty"><strong>条件に合うお店がありません</strong>エリアか種族を「すべて」に戻してください。</div>`; return; }
+    list.innerHTML = rows.map(s => {
+      const sp = spName(s.species), url = safeUrl(s.mapUrl), sc = s.scores || {}, sm = summary(sc), r = Math.round(sm.avg/2);
+      const ph = s.photos || {}, bread = arr(ph.bread), rec = arr(ph.receipt);
+      const bars = ITEMS.map(it => { const x = sc[it.k]; const t = x === "na" ? "対象外" : (x ? x : "－"); const w = typeof x === "number" ? x*10 : 0;
+        return `<span>${esc(it.n)}</span><span class="bar"><i style="width:${w}%"></i></span><span class="n">${t}</span>`; }).join("");
+      return `<article class="card">
+        <h3>${esc(s.name)}</h3>
+        <div class="meta">${s.area ? `<span>📍 ${esc(s.area)}</span>` : ""}${sp ? `<span class="chip">${esc(sp)}</span>` : `<span class="chip none">未分類</span>`}</div>
+        <div class="rating"><span class="loaves" aria-label="総合 ${sm.avg.toFixed(1)} / 10">${loaves(r)}</span><span class="num">${sm.n ? `総合 ${sm.avg.toFixed(1)} / 10（${sm.n}項目）` : "未評価"}</span></div>
+        ${typeof sc.unique === "number" && sc.unique > 0 ? `<div class="edge"><b>尖り</b>　${sc.unique} / 10</div>` : ""}
+        ${sm.n ? `<details class="bd"><summary>項目別の点数</summary><div class="bars">${bars}</div></details>` : ""}
+        ${bread.length ? `<div class="gallery">${bread.map((id,i)=>`<button type="button" data-view="${esc(id)}" aria-label="パンの写真${i+1}を拡大">${thumbs.get(id) ? `<img src="${esc(thumbs.get(id))}" alt="">` : ""}</button>`).join("")}</div>` : ""}
+        ${(s.purchaseDate || s.amount || rec.length) ? `<div class="facts">
+          ${s.purchaseDate ? `<span>購入日 ${esc(String(s.purchaseDate).replace(/-/g,"/"))}</span>` : ""}
+          ${s.amount ? `<span>購入金額 ¥${Number(s.amount).toLocaleString("ja-JP")}</span>` : ""}
+          ${rec.map((id,i)=>`<button type="button" class="link" data-view="${esc(id)}">レシート${rec.length>1?i+1:""}を見る</button>`).join("")}</div>` : ""}
+        ${s.oshi ? `<div class="oshi"><b>推し</b>　${esc(s.oshi)}</div>` : ""}
+        ${s.comment ? `<p class="comment">${esc(s.comment)}</p>` : ""}
+        <div class="card-foot">
+          ${url ? `<a class="maplink" href="${esc(url)}" target="_blank" rel="noopener">Googleマップで開く ↗</a>` : `<span class="nomap">地図URL未登録</span>`}
+          <button class="btn small" type="button" data-edit="${esc(s.id)}">編集</button>
+        </div>
+      </article>`;
+    }).join("");
+  }
+  function renderSpecies(){
+    $("spList").innerHTML = species.length ? species.map(s => `<div class="sp-row">
+      <input type="text" value="${esc(s.name)}" data-sp="${esc(s.id)}" maxlength="30" aria-label="種族名">
+      <button class="btn small danger" type="button" data-spdel="${esc(s.id)}">削除</button></div>`).join("")
+      : `<p class="note">まだ種族がありません。下の欄から追加してください。</p>`;
+    const sel = $("fSpecies"), cur = sel.value;
+    fillSelect(sel, [["","未分類"], ...species.map(s=>[s.id,s.name||"（名前なし）"])]);
+    if (species.some(s=>s.id===cur)) sel.value = cur;
+  }
+  function renderAll(){ renderFilters(); renderSpecies(); renderList(); }
+
+  /* ---------- 評価入力 ---------- */
+  function renderScores(){
+    $("fScores").innerHTML = ITEMS.map(it => {
+      const v = scores[it.k], isNa = v === "na";
+      const btns = Array.from({length:10},(_,i)=>i+1).map(i =>
+        `<button type="button" data-k="${it.k}" data-v="${i}" aria-label="${it.n} ${i}" aria-pressed="${v===i}" class="${v===i?"on":(typeof v==="number"&&i<v?"lit":"")}" ${isNa?"disabled":""}>${i}</button>`).join("");
+      return `${it.g ? `<div class="grp">${it.g}</div>` : ""}<div class="sc-row">
+        <div class="sc-head"><span>${it.n}　<small>${it.d}</small></span><span class="val">${isNa ? "対象外" : (v ? v : "－")}</span></div>
+        <div class="seg">${btns}</div>
+        ${it.na ? `<label class="na"><input type="checkbox" data-na="${it.k}" ${isNa?"checked":""}> 該当なし（ハード系など）</label>` : ""}</div>`;
+    }).join("");
+  }
+  $("fScores").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if(!b) return; const k=b.dataset.k, v=Number(b.dataset.v); scores[k] = scores[k]===v ? 0 : v; renderScores(); });
+  $("fScores").addEventListener("change", e => { const c = e.target.closest("[data-na]"); if(!c) return; scores[c.dataset.na] = c.checked ? "na" : 0; renderScores(); });
+
+  /* ---------- 写真の追加・削除（フォーム内） ---------- */
+  function upMsg(t){ const m=$("upMsg"); m.textContent=t||""; m.hidden=!t; }
+  function renderThumbs(){
+    for (const [kind, box] of [["bread","tBread"],["receipt","tReceipt"]]){
+      $(box).innerHTML = photos[kind].map((id,i) => `<div class="th">${thumbs.get(id) ? `<img src="${esc(thumbs.get(id))}" alt="${kind==="bread"?"パン":"レシート"}の写真${i+1}">` : ""}<button type="button" data-rm="${kind}" data-i="${i}" aria-label="この写真を外す">✕</button></div>`).join("");
+    }
+  }
+  async function handleFiles(kind, files){
+    let ok = 0;
+    for (const f of files){
+      upMsg(`写真を保存中…（${ok+1}/${files.length}）`);
+      const thumb = await shrink(f, 400, .7);
+      const full = kind === "receipt" ? await shrink(f, 2000, .85) : await shrink(f, 1200, .8);
+      if (!thumb || !full){ upMsg("この画像は読み込めませんでした。別の写真でお試しください。"); return; }
+      const id = db.ref("photoFull").push().key;
+      try{ await db.ref().update({["photoThumbs/"+id]:thumb, ["photoFull/"+id]:full}); }
+      catch(e){ upMsg("写真を保存できませんでした。もう一度お試しください。"); return; }
+      thumbs.set(id, thumb); photos[kind].push(id); freshIds.push(id); ok++; renderThumbs();
+    }
+    upMsg("");
+  }
+  $("upBread").addEventListener("change", e => { handleFiles("bread", [...e.target.files]); e.target.value=""; });
+  $("upReceipt").addEventListener("change", e => { handleFiles("receipt", [...e.target.files]); e.target.value=""; });
+  $("shopPanel").addEventListener("click", e => {
+    const b = e.target.closest("[data-rm]"); if(!b) return;
+    const kind = b.dataset.rm, i = Number(b.dataset.i), id = photos[kind][i];
+    photos[kind].splice(i, 1);
+    if (freshIds.includes(id)){ freshIds = freshIds.filter(x=>x!==id); removePhotos([id]); } else dropIds.push(id);
+    renderThumbs();
+  });
+
+  /* ---------- お店フォーム ---------- */
+  function openShop(id){
+    if (freshIds.length) removePhotos(freshIds);
+    freshIds = []; dropIds = []; upMsg("");
+    editingId = id || null;
+    const s = id ? shops.find(x=>x.id===id) : {};
+    $("shopPanelTitle").textContent = id ? "お店を編集" : "お店を追加";
+    $("fName").value = s.name||""; $("fArea").value = s.area||"";
+    renderSpecies(); $("fSpecies").value = species.some(x=>x.id===s.species) ? s.species : "";
+    scores = Object.assign({}, s.scores || {}); renderScores();
+    photos = { bread:arr((s.photos||{}).bread), receipt:arr((s.photos||{}).receipt) };
+    loadThumbs([...photos.bread, ...photos.receipt]).then(renderThumbs); renderThumbs();
+    $("fDate").value = s.purchaseDate || (id ? "" : new Date(Date.now()+9*36e5).toISOString().slice(0,10));
+    $("fAmount").value = s.amount ? String(s.amount) : "";
+    $("fOshi").value = s.oshi||""; $("fComment").value = s.comment||""; $("fMap").value = s.mapUrl||"";
+    $("fDelete").hidden = !id; $("fDelete").textContent = "このお店を削除"; delete $("fDelete").dataset.armed;
+    $("shopPanel").hidden = false; $("speciesPanel").hidden = true;
+    $("shopPanel").scrollIntoView({behavior:"smooth", block:"start"}); $("fName").focus({preventScroll:true});
+  }
+  $("btnAdd").onclick = () => openShop(null);
+  $("fCancel").onclick = () => { removePhotos(freshIds); freshIds = []; dropIds = []; $("shopPanel").hidden = true; };
+  $("list").addEventListener("click", e => { const b = e.target.closest("[data-edit]"); if(b) openShop(b.dataset.edit); });
+
+  $("shopForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("fName").value.trim(); if(!name) return;
+    const prev = editingId ? shops.find(x=>x.id===editingId) : null;
+    const row = {
+      name, area:$("fArea").value.trim(), species:$("fSpecies").value,
+      purchaseDate:$("fDate").value, amount:Number(($("fAmount").value||"").replace(/[^\d]/g,"")) || 0,
+      scores:Object.fromEntries(ITEMS.map(it=>[it.k, scores[it.k] || 0])),
+      photos:{ bread:[...photos.bread], receipt:[...photos.receipt] },
+      oshi:$("fOshi").value.trim(), comment:$("fComment").value.trim(), mapUrl:$("fMap").value.trim(),
+      createdAt: prev ? (prev.createdAt || Date.now()) : Date.now(), updatedAt: Date.now()
+    };
+    $("fSave").disabled = true;
+    try{
+      if (editingId) await db.ref("shops/"+editingId).set(row); else await db.ref("shops").push(row);
+      removePhotos(dropIds); freshIds = []; dropIds = []; $("shopPanel").hidden = true; banner("");
+    }catch(err){ fail(); }
+    finally{ $("fSave").disabled = false; }
+  });
+
+  $("fDelete").onclick = async () => {
+    const b = $("fDelete");
+    if (!b.dataset.armed){ b.dataset.armed="1"; b.textContent="もう一度押すと削除"; setTimeout(()=>{ delete b.dataset.armed; b.textContent="このお店を削除"; },3000); return; }
+    const s = shops.find(x=>x.id===editingId) || {};
+    const all = [...arr((s.photos||{}).bread), ...arr((s.photos||{}).receipt), ...freshIds];
+    try{ await db.ref("shops/"+editingId).remove(); removePhotos(all); freshIds = []; dropIds = []; $("shopPanel").hidden = true; }
+    catch(err){ fail(); }
+  };
+
+  /* ---------- 種族 ---------- */
+  $("btnSpecies").onclick = () => { const p=$("speciesPanel"); p.hidden = !p.hidden; if(!p.hidden){ $("shopPanel").hidden = true; renderSpecies(); } };
+  $("spForm").addEventListener("submit", async e => {
+    e.preventDefault(); const v = $("spNew").value.trim(); if(!v) return;
+    try{ await db.ref("species").push({name:v, createdAt:Date.now()}); $("spNew").value = ""; }catch(err){ fail(); }
+  });
+  $("spList").addEventListener("change", async e => {
+    const i = e.target.closest("[data-sp]"); if(!i) return;
+    const v = i.value.trim(), s = species.find(x=>x.id===i.dataset.sp);
+    if (!v || !s || s.name === v){ if(s) i.value = s.name; return; }
+    try{ await db.ref("species/"+s.id+"/name").set(v); }catch(err){ fail(); }
+  });
+  $("spList").addEventListener("click", async e => {
+    const b = e.target.closest("[data-spdel]"); if(!b) return;
+    if (!b.dataset.armed){ b.dataset.armed="1"; b.textContent="本当に削除"; setTimeout(()=>{ delete b.dataset.armed; b.textContent="削除"; },3000); return; }
+    try{ await db.ref("species/"+b.dataset.spdel).remove(); }catch(err){ fail(); }
+  });
+  $("qArea").onchange = renderList; $("qSpecies").onchange = renderList;
+
+  /* ---------- 初回だけ種族7つを登録 ---------- */
+  async function seedOnce(){
+    const flag = await db.ref("meta/seeded").once("value");
+    if (flag.val()) return;
+    const up = {"meta/seeded": true}, t = Date.now();
+    DEFAULT_SPECIES.forEach((n,i) => { up["species/"+db.ref("species").push().key] = {name:n, createdAt:t+i}; });
+    await db.ref().update(up);
+  }
+
+  /* ---------- データの同期（2人の入力がリアルタイムで反映） ---------- */
+  function startSync(){
+    offSpecies = db.ref("species").on("value", snap => {
+      const v = snap.val() || {};
+      species = Object.entries(v).map(([id,d]) => ({id, ...d})).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+      renderAll();
+    }, () => banner("データを読み込めませんでした。Firebaseのルール設定を確認してください。"));
+    offShops = db.ref("shops").on("value", async snap => {
+      const v = snap.val() || {};
+      shops = Object.entries(v).map(([id,d]) => ({id, ...d})).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      renderAll();
+      await loadThumbs(shops.flatMap(s => arr((s.photos||{}).bread)));
+      renderList();
+    }, () => banner("データを読み込めませんでした。Firebaseのルール設定を確認してください。"));
+  }
+  function stopSync(){ db.ref("species").off(); db.ref("shops").off(); shops = []; species = []; thumbs.clear(); }
+
+  /* ---------- ログイン ---------- */
+  $("loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const m = $("lMsg"); m.hidden = true; $("lBtn").disabled = true;
+    try{ await auth.signInWithEmailAndPassword($("lMail").value.trim(), $("lPass").value); $("lPass").value = ""; }
+    catch(err){ m.textContent = "メールアドレスかパスワードが違います。"; m.hidden = false; }
+    finally{ $("lBtn").disabled = false; }
+  });
+  $("btnLogout").onclick = () => auth.signOut();
+
+  auth.onAuthStateChanged(async user => {
+    if (user){
+      $("loginPanel").hidden = true; $("app").hidden = false; $("who").hidden = false;
+      $("whoMail").textContent = user.email || "";
+      renderScores();
+      try{ await seedOnce(); }catch(e){}
+      startSync();
+    } else {
+      stopSync();
+      $("loginPanel").hidden = false; $("app").hidden = true; $("who").hidden = true;
+    }
+  });
+})();
+
+</script>
+</body>
+</html>
